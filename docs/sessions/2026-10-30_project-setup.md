@@ -1,4 +1,4 @@
-# Session — 2026-10-30: project setup
+# Session — 2026-10-30: project setup and Phase 1 prototype
 
 ## Goal
 Set up the project and docs for a single-cell browser that shows per-cell reads.
@@ -16,10 +16,23 @@ Set up the project and docs for a single-cell browser that shows per-cell reads.
 - EES oocyst data is bulk long reads (FLAIR), not single-cell.
 - Possible label mismatch: AP2XI-2/AP2XII-1 IAA is 48h (folder) vs 24h (table).
 
+## Follow-up in the same session: Phase 1 built
+- User answers: IAA timing unknown to them → found in Sc-x2 overview (24h);
+  prototype on AP2XI-2/AP2XII-1; local first, public later; include antisense;
+  single-cell only.
+- Wrote `scripts/config.py`, `prep_ref.py`, `prep_bam.py`, `export_cells.py`,
+  `serve.py`, and `web/` (index.html, app.js, style.css).
+- Found igv.js accepts a function filter → no fork needed.
+- Found and worked around an igv.js 3.8.8 block-cache bug (open-ended Range).
+- Fixed a track-reload race (generation counter, parallel loads) and the read
+  highlight ring (must be WebGL to sit above WebGL points).
+- Verified UMI counts match Cell Ranger exactly at two genes.
+
 ## Decisions made
-- igv.js, no fork for Phase 1; Sc-x2 read-only; generated data in `data/`.
+- igv.js 3.8.8 without a fork; Sc-x2 read-only; generated data in `data/`.
+- Default locus AP2XI-2 (SAG1 is too dense to start on).
 
 ## Next session
-- Answer the open questions in `docs/overview.md`.
-- Write `scripts/prep_bam.py` on one dataset; measure the filtered BAM size.
-- Write `scripts/export_cells.py`, then the first `web/index.html`.
+- Try it by hand; collect UX wishes.
+- Decide on the Phase 2 backend (also the route to public hosting).
+- Add more lines.

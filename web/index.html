@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cell Read Browser</title>
+<script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>Cell Read Browser <span id="line-label"></span></h1>
+  <form id="search" autocomplete="off">
+    <input id="search-input" type="search" placeholder="Gene ID, description, or chr:start-end" aria-label="Go to gene or locus">
+    <ul id="search-results" hidden></ul>
+  </form>
+</header>
+
+<main>
+  <section id="cells">
+    <div class="toolbar">
+      <label>Colour <select id="color-by">
+        <option value="cluster">Leiden cluster</option>
+        <option value="phase">Cell-cycle phase</option>
+        <option value="stage10">Stage (10-stage call)</option>
+        <option value="brady_ees">Bradyzoite / EES call</option>
+        <option value="pseudotime">Pseudotime</option>
+        <option value="umis">UMIs per cell</option>
+      </select></label>
+      <div class="seg" role="group" aria-label="Selection mode">
+        <button data-mode="replace" class="on">Replace</button>
+        <button data-mode="add">Add</button>
+        <button data-mode="remove">Remove</button>
+      </div>
+    </div>
+    <div id="panels"></div>
+    <div id="legend"></div>
+    <div id="selection-bar">
+      <span id="sel-summary">No selection: reads from all cells</span>
+      <span class="spacer"></span>
+      <button id="sel-clear">Clear</button>
+      <button id="sel-export">Export barcodes</button>
+    </div>
+    <p class="hint">Lasso or click cells (Shift adds). Click a legend entry to select that group in one condition.
+      Click a read to find its cell.</p>
+  </section>
+
+  <section id="genome">
+    <div class="toolbar">
+      <label>Group reads <select id="group-by">
+        <option value="tag:CL">by cluster</option>
+        <option value="strand">by strand</option>
+        <option value="none">none</option>
+      </select></label>
+      <label>Colour reads <select id="read-color">
+        <option value="strand">by strand</option>
+        <option value="tag:RE">by region (exon / intron / intergenic)</option>
+        <option value="tag:CB">by cell</option>
+        <option value="none">none</option>
+      </select></label>
+      <span id="read-cell"></span>
+    </div>
+    <div id="igv"></div>
+  </section>
+</main>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

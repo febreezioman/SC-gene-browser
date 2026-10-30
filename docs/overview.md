@@ -9,26 +9,43 @@ it needs a backend or a fork of igv.js.
 
 ## Status (2026-10-30)
 
-- Project set up: docs, protocol, layout. No code yet.
-- Data surveyed (`docs/data.md`): 9 Cell Ranger BAMs, a per-cell table with
-  112,685 cells across 7 dataset×condition groups, ToxoDB-13 reference.
-- Plan written (`docs/design.md`): Phase 1 = igv.js + plotly, BAMs retagged
-  so each cell is a read group.
+Phase 1 prototype runs locally on AP2XI-2/AP2XII-1 (UT 11,642 cells,
+IAA 24h 14,386 cells). See README for how to run it.
+
+- Slim BAMs: UT 28.2M reads / 1.50 GB, IAA 24h 49.4M reads / 2.71 GB
+  (from 11–12 GB each), ~7 min per condition.
+- Verified: the slim BAM holds exactly the molecules Cell Ranger counted
+  (AP2XI-2: 222/222 UMIs, AP2XII-1: 985/985 in UT).
+- Verified in headless Chrome: cluster selection, shift-add across conditions,
+  gene search, read click → cell ring. AP2XI-2 locus loads ~6 MB per track.
+- Known limit: every read in the window is downloaded and parsed before the
+  cell filter. Fine for most genes; slow for very high ones (SRS29B/SAG1 has
+  ~583k UT reads in 2 kb). That is the trigger for the Phase 2 backend.
+- Observation: most UT reads at AP2XI-2 are antisense to it (`AN` tag, + strand
+  on a − strand gene), and Cell Ranger did not count them (`xf 0`).
 
 ## Decisions
 
-- **igv.js** over JBrowse 2 for the prototype: MIT, single file, easy to fork,
-  stable. JBrowse kept as a fallback.
-- Start **without a fork** (RG = cell trick); fork only if needed.
+- **igv.js 3.8.8, no fork.** Its alignment `filter` accepts a function, so the
+  page filters on the `CB` tag directly. No read-group rewrite.
+- `cacheBlocks: false` on read tracks to avoid an igv.js 3.8.8 bug (open-ended
+  Range request that pulled 790 MB per load). Worth reporting upstream.
+- Slim BAMs keep everything from called cells except UMI duplicates, including
+  antisense, intronic, intergenic and multimapped reads (user: antisense must be
+  visible).
+- AP2XI-2/AP2XII-1 IAA is **24h**. The `Duo_IAA_48h_Feb2026` folder name is a
+  known mislabel (Sc-x2 overview, 2026-06-30).
+- Single-cell only for now; the EES oocyst long reads are out of scope.
+- Local use first; public hosting is wanted later (see design.md, Hosting).
 - Sc-x2 is read-only; all generated data lives in `data/` (gitignored).
-- 2D UMAP for selection (no lasso in plotly 3D). The 3D page can come later.
+- 2D UMAP for selection, one panel per condition (clusters are per condition).
 
-## Open questions
+## Open questions / next
 
-1. AP2XI-2/AP2XII-1 IAA: the BAM folder says 48h, the coords table says 24h.
-   Which is right?
-2. First dataset to prototype on? Suggest AP2XI-2/AP2XII-1 UT + IAA (smallest).
-3. Local-only use, or does it need to go on the lab site? (Decides hosting/auth.)
-4. Count only reads used for UMI counting (`xf & 8`), or show everything,
-   including intronic/antisense reads that were not counted?
-5. EES oocyst long reads: wanted as a track (isoforms / aligned reads)?
+1. Phase 2 backend (FastAPI + pysam returning only the selected cells' reads),
+   so highly expressed genes and large selections stay fast. Needed for public
+   hosting too, since that also needs real auth.
+2. Add the other lines (AP2XII-1/AP2VIII-7, AP2XII-1/AP2VIII-7/AP2XI-2, MORC KD).
+   MORC KD has no rows in the coords table; its cells/clusters need another source.
+3. Per-cell normalised coverage: selection vs rest.
+4. Colour the UMAP by expression of the gene in view.

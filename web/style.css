@@ -1,0 +1,93 @@
+:root {
+  color-scheme: light; /* igv.js has no dark theme, so the page stays light */
+  --surface-0: #f4f3ef;
+  --surface-1: #fcfcfb;
+  --border: #dcdbd6;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #8a8984;
+  --accent: #2a78d6;
+  font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--surface-0); color: var(--text-primary); }
+
+header {
+  display: flex; align-items: center; gap: 24px;
+  padding: 10px 16px; background: var(--surface-1); border-bottom: 1px solid var(--border);
+}
+h1 { font-size: 16px; margin: 0; font-weight: 600; white-space: nowrap; }
+#line-label { color: var(--text-secondary); font-weight: 400; margin-left: 8px; }
+
+#search { position: relative; flex: 1; max-width: 520px; }
+#search-input {
+  width: 100%; padding: 6px 10px; font: inherit;
+  border: 1px solid var(--border); border-radius: 6px; background: #fff;
+}
+#search-results {
+  position: absolute; z-index: 1000; left: 0; right: 0; top: 100%; margin: 4px 0 0; padding: 4px 0;
+  list-style: none; background: #fff; border: 1px solid var(--border); border-radius: 6px;
+  max-height: 360px; overflow-y: auto; box-shadow: 0 4px 16px rgb(0 0 0 / 0.12);
+}
+#search-results li { padding: 5px 10px; cursor: pointer; }
+#search-results li:hover, #search-results li.active { background: #eef4fc; }
+#search-results .gid { font-family: ui-monospace, monospace; }
+#search-results .desc { color: var(--text-secondary); margin-left: 8px; }
+
+main {
+  display: grid; grid-template-columns: minmax(340px, 38%) 1fr; gap: 12px;
+  padding: 12px 16px; height: calc(100vh - 53px);
+}
+section { background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; min-width: 0; }
+#cells { display: flex; flex-direction: column; overflow-y: auto; }
+#genome { overflow: auto; }
+
+.toolbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+  padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--text-secondary);
+}
+select, button { font: inherit; }
+select { padding: 3px 6px; border: 1px solid var(--border); border-radius: 4px; background: #fff; }
+button {
+  padding: 4px 10px; border: 1px solid var(--border); border-radius: 4px;
+  background: #fff; color: var(--text-primary); cursor: pointer;
+}
+button:hover { border-color: var(--text-muted); }
+.seg { display: inline-flex; }
+.seg button { border-radius: 0; margin-left: -1px; }
+.seg button:first-child { border-radius: 4px 0 0 4px; }
+.seg button:last-child { border-radius: 0 4px 4px 0; }
+.seg button.on { background: var(--accent); border-color: var(--accent); color: #fff; position: relative; }
+
+#panels { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px 8px 0; }
+.panel h2 { font-size: 13px; font-weight: 600; margin: 4px 4px 0; }
+.panel .plot { width: 100%; aspect-ratio: 1; }
+
+#legend { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; padding: 4px 12px 8px; }
+#legend .col h3 { font-size: 12px; font-weight: 600; margin: 4px 0; color: var(--text-secondary); }
+.chip {
+  display: flex; align-items: center; gap: 6px; width: 100%; text-align: left;
+  border: 0; background: none; padding: 2px 4px; border-radius: 4px; color: var(--text-primary);
+}
+.chip:hover { background: #eef4fc; }
+.chip .sw { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.chip .n { margin-left: auto; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.ramp { height: 10px; border-radius: 3px; margin: 4px 0 2px; }
+.ramp-labels { display: flex; justify-content: space-between; color: var(--text-muted); font-size: 12px; }
+
+#selection-bar {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  border-top: 1px solid var(--border); margin-top: auto;
+}
+#sel-summary { font-weight: 500; }
+.spacer { flex: 1; }
+.hint { margin: 0; padding: 0 12px 10px; color: var(--text-muted); font-size: 12px; }
+#read-cell { margin-left: auto; }
+#read-cell button { margin-left: 6px; padding: 1px 8px; }
+
+#igv { padding: 4px 8px; }
+
+@media (max-width: 900px) {
+  main { grid-template-columns: 1fr; height: auto; }
+  #genome { min-height: 600px; }
+}

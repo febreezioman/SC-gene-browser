@@ -24,6 +24,20 @@ web/               # The browser page (HTML/JS), igv.js + plotly
 data/              # Generated, browser-ready files (gitignored)
 ```
 
+## Run it
+
+```bash
+P=~/projects/Sc-x2/envs/sc/bin/python
+$P scripts/prep_ref.py                          # reference, ~1 min
+$P scripts/prep_bam.py AP2XI-2_AP2XII-1         # slim BAMs, ~15 min
+$P scripts/export_cells.py AP2XI-2_AP2XII-1     # cell table
+python3 scripts/serve.py                        # then open http://127.0.0.1:8000/web/
+```
+
+Lasso/click cells or click a legend entry; reads for those cells appear on the
+right, one track per condition. Click a read to ring its cell on the UMAP.
+`?locus=TGME49_chrXII:1176841-1187769` opens at a given locus.
+
 ## Status
 
-Planning. Nothing runs yet; see `docs/design.md` for Phase 1.
+Phase 1 prototype works on AP2XI-2/AP2XII-1 (UT, IAA 24h). See `docs/overview.md`.

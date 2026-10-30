@@ -22,32 +22,48 @@ Selection sources: single click, box/lasso (2D only; plotly cannot lasso in
 
 | Option | License | Read-level? | Filter by CB list | Verdict |
 |---|---|---|---|---|
-| **igv.js** | MIT | yes | via RG trick, or small fork | **Start here** |
+| **igv.js** | MIT | yes | **yes: `filter` accepts a function** (no fork) | **Using it (3.8.8)** |
 | JBrowse 2 | Apache-2.0 | yes | `tags.CB` field filter (v5 beta, untested) | Revisit if igv.js limits bite |
 | JBrowse single-cell demo | Apache-2.0 | coverage only | whole cell types | Too coarse |
 | Vitessce | MIT | no | n/a | Profiles only |
 | UCSC / IGB | mixed / Java desktop | n/a | n/a | Skip |
 
-igv.js is one JS file, no build step, and the CB filter is a small,
-self-contained change (and upstreamable).
+igv.js is one JS file with no build step. **Found 2026-10-30 in the 3.8.8
+source:** an alignment track's `filter` may be a function
+(`typeof config.filter === 'function'` in `setReaderDefaults`), and it runs
+*before* downsampling. So `filter: a => selectedCBs.has(a.getTag('CB'))` works
+on the stock library: no read-group rewrite, no fork. A function filter
+replaces the default filter, so the page re-applies the default checks itself
+(mapped, not QC-fail, not duplicate).
 
 ## Phase 1: static prototype, no fork
 
-1. **`scripts/prep_bam.py`** (pysam). Per dataset×condition:
-   - keep reads whose `CB` is in the cell table, drop 0x400 duplicates
-     (one read per molecule), optionally keep only `xf & 8` (counted reads);
-   - **rewrite `RG` = `<dataset>|<condition>|<CB>`** so each cell is a read
-     group, and add a cluster tag (e.g. `CL:Z:UT·3`);
-   - write `data/<id>.bam` + index. Expect a large shrink from 11–14 GB;
-     measure it.
-2. **`scripts/export_cells.py`**: one compact cell table for the page
-   (barcode as in the BAM RG, 2D UMAP, cluster, phase, stage calls).
-   JSON or Arrow; ~110k cells is fine in the browser.
-3. **`web/index.html`**: plotly 2D UMAP + igv.js. On selection, set the
-   alignment track's `filter.readgroups` to the selected cells, `groupBy:
-   tag:CL`, raise `samplingDepth` well above the default 100.
-4. **Local server with Range support** (e.g. `npx http-server`, or a 20-line
-   Python server). Plain `python -m http.server` will not work.
+1. **`scripts/prep_bam.py`**: per condition, `samtools view -D CB:<cells>
+   -F 0x404` keeps called cells only and drops UMI duplicates (one read per
+   molecule). **All other reads are kept, including antisense (`AN`), intronic
+   and intergenic ones and multimappers** (user decision: antisense must be
+   visible). pysam then adds `CL:Z:<leiden cluster>` for grouping.
+2. **`scripts/prep_ref.py`**: indexed FASTA, bgzipped+tabixed GTF, gene search
+   JSON with ToxoDB descriptions.
+3. **`scripts/export_cells.py`**: columnar `cells.json` (2D UMAP from
+   `combined.h5ad`, clusters/phase/stage calls from the coords table).
+4. **`web/`** (`index.html`, `app.js`, `style.css`): one plotly panel per
+   condition on the shared 2D embedding (clusters are per condition, so never
+   on a shared key). Lasso/click/legend-chip selection with replace/add/remove.
+   One igv.js read track per condition, rebuilt on selection change, grouped by
+   `tag:CL`, coloured by strand / region (`RE`) / cell (`CB`),
+   `samplingDepth: 10000`. Clicking a read rings its cell on the UMAP.
+5. **`scripts/serve.py`**: static server with Range support. Plain
+   `python -m http.server` ignores Range.
+
+Run:
+```bash
+P=~/projects/Sc-x2/envs/sc/bin/python
+$P scripts/prep_ref.py
+$P scripts/prep_bam.py AP2XI-2_AP2XII-1
+$P scripts/export_cells.py AP2XI-2_AP2XII-1
+python3 scripts/serve.py        # http://127.0.0.1:8000/web/
+```
 
 Done when: clicking one cell at a highly expressed gene (e.g. SAG1) shows its
 reads, and the count matches that cell's UMI count in the h5ad.
@@ -61,8 +77,8 @@ reads, and the count matches that cell's UMI count in the h5ad.
   and also enables the coverage comparison below cheaply.
 - **Selection vs. rest coverage**, normalised per cell. Compute server-side
   or in the page from the loaded reads.
-- **Fork igv.js** for a real `filter: {tag: 'CB', values: [...]}` instead of
-  the RG rewrite; offer it upstream.
+- A fork of igv.js is probably unnecessary (see function filter above). Fork
+  only for things like per-cell normalised coverage in the track itself.
 - Gene expression colouring of the UMAP, linked to the current locus.
 - Multiple datasets side by side (UT vs IAA tracks for the same selection).
 
