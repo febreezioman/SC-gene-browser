@@ -1,26 +1,28 @@
 #!/usr/bin/env python3
 """
 Browser-ready reference: genome FASTA + index, annotation GTF, gene search index.
+One folder per reference in config.REFS:
 
-  data/ref/genome.fasta(.fai)  symlink to the Sc-x2 FASTA, indexed here
-  data/ref/genes.gtf.gz(.tbi)  the Cell Ranger GTF with transcript_id and
-                               gene_name set to the ME49 gene ID, so igv.js
-                               labels models "TGME49_233460" (not
-                               "rna_TGME49_233460-1"; genes and transcripts are
-                               1:1 here). Sorted, bgzipped, tabix-indexed.
-  data/ref/genes.json          [[gene_id, chr, start, end, strand, description,
-                                 [common names]]] for the page's gene search
+  data/ref/<ref>/genome.fasta(.fai)  copy of the FASTA (a copy, not a symlink,
+                                     so data/ can move to another disk), indexed
+  data/ref/<ref>/genes.gtf.gz(.tbi)  the GTF, sorted, bgzipped, tabix-indexed so
+                                     igv.js fetches only the visible region
+                                     (the page labels models by gene_id)
+  data/ref/<ref>/genes.json          [[gene_id, chr, start, end, strand,
+                                       description, [common names]]]
 
 Common names are not a field in either ToxoDB file; they are pulled from the
 descriptions: parenthesised symbols in ToxoDB-13 ("SRS29B (SAG1)") and
 symbol-like trailing words in ToxoDB-68 ("... AP2XI-2"). ~1,600 genes get one.
 
-Usage: ~/projects/Sc-x2/envs/sc/bin/python scripts/prep_ref.py
+Usage: ~/projects/Sc-x2/envs/sc/bin/python scripts/prep_ref.py [ref ...]
 """
 from __future__ import annotations
 
+import argparse
 import json
 import re
+import shutil
 import urllib.parse
 
 import pandas as pd
@@ -43,7 +45,7 @@ def symbols(desc: str) -> list[str]:
 
 def common_names() -> dict[str, list[str]]:
     names: dict[str, list[str]] = {}
-    with open(config.GFF) as fh:
+    with open(config.NAMES_GFF) as fh:
         for line in fh:
             f = line.split("\t")
             if len(f) > 8 and f[2] == "gene":
@@ -62,32 +64,28 @@ def common_names() -> dict[str, list[str]]:
     return clean
 
 
-def main() -> None:
-    out = config.DATA / "ref"
+def build(name: str, ref: dict, desc: dict[str, str], names: dict[str, list[str]]) -> None:
+    out = config.DATA / "ref" / name
     out.mkdir(parents=True, exist_ok=True)
 
     fasta = out / "genome.fasta"
-    if not fasta.exists():
-        fasta.symlink_to(config.GENOME_FASTA)
+    if fasta.is_symlink():
+        fasta.unlink()
+    if not fasta.exists() or fasta.stat().st_size != ref["fasta"].stat().st_size:
+        shutil.copyfile(ref["fasta"], fasta)
     pysam.faidx(str(fasta))
-
-    desc = pd.read_csv(config.ANNOTATION_TSV, sep="\t", usecols=["gene_id", "description"])
-    desc = dict(zip(desc.gene_id, desc.description.fillna("")))
-    names = common_names()
 
     genes: dict[str, list] = {}
     rows = []
     gid_re = re.compile(r'gene_id "([^"]+)"')
-    tid_re = re.compile(r'transcript_id "[^"]+"')
-    with open(config.GTF) as fin:
+    with open(ref["gtf"]) as fin:
         for line in fin:
-            if line.startswith("#"):
+            if line.startswith("#") or not line.strip():
                 continue
             f = line.rstrip("\n").split("\t")
-            gid = gid_re.search(f[8]).group(1)
-            f[8] = tid_re.sub(f'transcript_id "{gid}"', f[8]) + f' gene_name "{gid}";'
             rows.append(f)
             if f[2] == "transcript":
+                gid = gid_re.search(f[8]).group(1)
                 start, end = int(f[3]), int(f[4])
                 g = genes.setdefault(gid, [gid, f[0], start, end, f[6], desc.get(gid, ""), names.get(gid, [])])
                 g[2], g[3] = min(g[2], start), max(g[3], end)
@@ -99,7 +97,21 @@ def main() -> None:
 
     (out / "genes.json").write_text(json.dumps(list(genes.values()), separators=(",", ":")))
     named = sum(1 for g in genes.values() if g[6])
-    print(f"{len(genes):,} genes ({named:,} with a common name) -> {out}")
+    print(f"{name}: {len(genes):,} genes ({named:,} with a common name) -> {out}")
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("refs", nargs="*", help=f"default: all of {', '.join(config.REFS)}")
+    args = ap.parse_args()
+    unknown = set(args.refs) - set(config.REFS)
+    if unknown:
+        ap.error(f"unknown reference(s): {', '.join(sorted(unknown))}")
+    ann = pd.read_csv(config.ANNOTATION_TSV, sep="\t", usecols=["gene_id", "description"])
+    desc = dict(zip(ann.gene_id, ann.description.fillna("")))
+    names = common_names()
+    for name in args.refs or config.REFS:
+        build(name, config.REFS[name], desc, names)
 
 
 if __name__ == "__main__":

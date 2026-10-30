@@ -66,8 +66,32 @@ AnnData concat index). The BAM `CB` is `AAACCAAAGATAGCCC-1`. Strip the last
 
 ## Other data
 
-- `processing/alrubaye2026_perturbseq/`: STARsolo BAM from a public dataset,
-  plus per-cell-type BAMs (`celltype/*.bam`). Possible second dataset later.
+### AlRubaye et al. 2026 cat gut (line `AlRubaye2026_cat_gut`)
+
+In-vivo cat perturb-seq, 10x 3' v3 library SRR36982562 (enteric stages;
+TgVEG on the ME49 reference). The only AlRubaye library with cDNA reads.
+Processed in Sc-x2 (scripts/58: cutadapt TSO/Nextera trimming, STARsolo vs
+ME49 ToxoDB-68 + cat + human + mouse; scripts/59: cell types transferred from
+the published atlas; scripts/62: UMAP + Leiden 0.4).
+
+- BAM: `processing/alrubaye2026_perturbseq/ME49_unique.bam`: unique ME49
+  reads only, 598M reads, 22 GB, STARsolo tags `CB` (no `-1`), `UB`, `GX`/`GN`.
+  **No duplicate flags**: prep_bam.py keeps one read per (CB, UB, GX) or, for
+  reads outside genes, per (CB, UB, strand, start). Reads are ~60 nt after
+  trimming; a few STAR splices are implausibly long (~0.01% > 20 kb), kept.
+- Cells: `results/figs/novel_antisense_10x/alrubaye_perturbseq/cells.tsv`
+  (23,121 cells, transferred label, confidence r, guide target) and
+  `viz/umap_coords.tsv.gz` (UMAP, Leiden). Labels: Merozoite-C 12,417,
+  pre-gametes 3,679, Transitioning-Merozoites 3,345, Merozoite-B 2,749,
+  BRP1+ 466, Merozoite-A 333, Female 121, Male-1 10, Tachyzoites 1.
+  Only 26 cells have a single guide call. Label transfer agreed with the
+  published labels for 9% of the 90 overlapping barcodes: treat labels as a guide.
+- Reference: ToxoDB-68 ME49 FASTA (`~/projects/Genome-files/ToxoDB-68/`,
+  contigs identical to the BAM) and GTF
+  (`/media/jon/Working-drive-nv/EES-Oocyst-RNAseq/refs/ME49/`; 8,778 genes,
+  30 with several transcripts). The STAR index records the GTF at an older
+  Crucial X10 path; it has moved.
+- Not used: the per-cell-type BAMs in `celltype/` (subsets of the same data).
 - `/media/jon/Working-2-SSD/EES-Oocyst-RNAseq_tmp/coug_flair2/`: bulk
   long-read (FLAIR) oocyst data. **Out of scope** (user, 2026-10-30): the project
   is single-cell only for now.
@@ -76,8 +100,9 @@ AnnData concat index). The BAM `CB` is `AAACCAAAGATAGCCC-1`. Strip the last
 
 | File | Made by | Notes |
 |---|---|---|
-| `data/ref/genome.fasta(.fai)` | `prep_ref.py` | symlink to Sc-x2 FASTA + index |
-| `data/ref/genes.gtf.gz(.tbi)` | `prep_ref.py` | sorted, bgzipped, `gene_name` = gene ID |
-| `data/ref/genes.json` | `prep_ref.py` | gene search index with descriptions |
-| `data/<line>/<condition>.bam(.bai)` | `prep_bam.py` | called cells only, no 0x400 dups, `CL` tag |
-| `data/<line>/cells.json` | `export_cells.py` | 2D UMAP + per-cell metadata, columnar |
+| `data/ref/<ref>/genome.fasta(.fai)` | `prep_ref.py` | copy of the FASTA + index |
+| `data/ref/<ref>/genes.gtf.gz(.tbi)` | `prep_ref.py` | sorted, bgzipped GTF |
+| `data/ref/<ref>/genes.json` | `prep_ref.py` | gene search index: descriptions + common names |
+| `data/<line>/cells.json` | `export_cells.py` | UMAP, fields (colour/group options), BAM names, ref |
+| `data/lines.json` | `export_cells.py` | the page's dataset list |
+| `data/<line>/<condition>.bam(.bai)` | `prep_bam.py` | cells only, one read per molecule, `CL` tag |

@@ -1,8 +1,10 @@
 // Cell Read Browser: build a cell selection on the UMAP, then load those cells'
 // reads in igv.js.
 //
-// One plotly panel per condition (clusters are numbered per condition, so they
-// are never shown on a shared colour key). Selecting is cheap and local; reads
+// Each line (dataset) has its own cells.json, which declares its fields
+// (colour options and groups), its conditions, its BAMs and its reference.
+// One plotly panel per condition (clusters may be numbered per condition, so
+// conditions never share a colour key). Selecting is cheap and local; reads
 // load only when "Load reads" is pressed. igv.js then gets one alignment track
 // per condition whose filter keeps reads whose CB tag is a selected cell. The
 // filter is a function, which igv.js applies before downsampling.
@@ -12,11 +14,11 @@ import igv from "https://cdn.jsdelivr.net/npm/igv@3.8.8/dist/igv.esm.min.js";
 const params = new URLSearchParams(location.search);
 const LINE = params.get("line") || "AP2XI-2_AP2XII-1";
 const DATA = `../data/${LINE}/`;
-const REF = "../data/ref/";
-// AP2XI-2 (TGME49_310900): a knockdown target, and light enough to load fast.
-// Very highly expressed genes (SRS29B/SAG1: ~290k reads deep) take a while,
-// because every read in the window is downloaded and parsed before filtering.
-const START_LOCUS = params.get("locus") || "TGME49_chrXI:1,645,000-1,654,500";
+// AP2XI-2: a knockdown target, and light enough to load fast. Very highly
+// expressed genes (SRS29B/SAG1: ~290k reads deep in AP2XI-2/AP2XII-1 UT) take
+// a while, because every read in the window is downloaded and parsed before
+// the cell filter.
+const START_GENE = "TGME49_310900";
 
 // Categorical slots in fixed order (dataviz reference palette, light mode).
 const SLOTS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"];
@@ -25,24 +27,16 @@ const DIM = "rgba(190, 189, 184, 0.35)";
 // Sequential blue ramp, light -> dark.
 const RAMP = ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"];
 
-// Fixed category orders so a colour always means the same entity.
-const ORDERS = {
-  phase: ["G1a", "G1b", "S", "M", "C"],
-  brady_ees: ["Tachyzoite", "Bradyzoite", "Bradyzoite/EES1-3", "EES1-3"],
-  stage10: ["Tachyzoites", "BRP1+", "Merozoite A", "Merozoite B", "Merozoite C",
-            "Trans. Merozoites", "Pre-gamete", "Female", "Male-1", "Male-2"],
-};
-const CONTINUOUS = { pseudotime: "Pseudotime", umis: "UMIs per cell" };
-
 const state = {
   cells: null,          // columnar table from cells.json
+  fields: {},           // key -> field spec
   n: 0,
   selected: new Set(),  // global cell indices, the selection being built
   loaded: null,         // Set of cell indices whose reads are shown; null = none loaded
   loadedText: "",
   pick: "group",
   mode: "add",
-  colorBy: "cluster",
+  colorBy: null,
   groupBy: "none",
   readColor: "strand",
   displayMode: "EXPANDED",
@@ -53,10 +47,13 @@ let browser;
 let readTracks = [];
 let cbIndex;            // per condition: Map CB -> cell index
 let hoverText;          // per cell tooltip
+let genes = [];
 const plots = [];       // per condition: {div, idx: [cell indices]}
 
 const $ = id => document.getElementById(id);
 const fmt = n => n.toLocaleString();
+const field = key => state.fields[key];
+const isNum = key => field(key).type === "num";
 
 // ---------- data and groups ----------
 
@@ -66,44 +63,52 @@ async function loadJSON(url) {
   return r.json();
 }
 
-// The variable that defines a "group": the colour variable, or the cluster
-// when colouring by a continuous value.
-const groupVar = () => (state.colorBy in CONTINUOUS ? "cluster" : state.colorBy);
-
-function groupOf(i, v = groupVar()) {
-  const c = state.cells;
-  return v === "cluster" ? String(c.cluster[i]) : c[v][i];
+// The field that defines a "group": the colour field, or the first
+// categorical field when colouring by a number.
+function groupVar() {
+  if (!isNum(state.colorBy)) return state.colorBy;
+  return state.cells.fields.find(f => f.type === "cat").key;
 }
+
+const groupOf = (i, v = groupVar()) => state.cells.values[v][i];
 
 function groupName(key, v = groupVar()) {
-  return v === "cluster" ? `Cluster ${key}` : (key || "unassigned");
+  return key === "" ? "unassigned" : (field(v).prefix || "") + key;
 }
 
+// Display order of a categorical field within one condition: the field's own
+// order where given, then any other values present (numbers sorted as numbers).
 function groupOrder(cond, v = groupVar()) {
-  if (v === "cluster") {
-    const ids = new Set(plots[cond].idx.map(i => state.cells.cluster[i]));
-    return [...ids].sort((a, b) => a - b).map(String);
-  }
-  return ORDERS[v];
+  const present = new Set(plots[cond].idx.map(i => groupOf(i, v)));
+  const given = (field(v).order || []).filter(k => present.has(k));
+  const rest = [...present].filter(k => !given.includes(k))
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  return field(v).order ? given.concat(rest) : rest;
 }
 
-function colorFor(i, cond) {
-  if (state.colorBy in CONTINUOUS) {
-    const [lo, hi] = continuousRange();
-    const v = state.cells[state.colorBy][i];
-    if (v < 0) return OTHER;
-    const t = Math.max(0, Math.min(1, (v - lo) / (hi - lo || 1)));
-    return RAMP[Math.round(t * (RAMP.length - 1))];
-  }
-  const k = groupOrder(cond).indexOf(groupOf(i));
+// Colour slot of a category: its position in the field's declared order
+// (stable across conditions), or in the condition's own order otherwise.
+function slotOf(key, cond, v = groupVar()) {
+  const order = field(v).order || groupOrder(cond, v);
+  const k = order.indexOf(key);
   return k >= 0 && k < SLOTS.length ? SLOTS[k] : OTHER;
 }
 
+function colorFor(i, cond) {
+  if (isNum(state.colorBy)) {
+    const [lo, hi] = numRange(state.colorBy);
+    const v = state.cells.values[state.colorBy][i];
+    if (v === null) return OTHER;
+    const t = Math.max(0, Math.min(1, (v - lo) / (hi - lo || 1)));
+    return RAMP[Math.round(t * (RAMP.length - 1))];
+  }
+  return slotOf(groupOf(i, state.colorBy), cond, state.colorBy);
+}
+
 const rangeCache = {};
-function continuousRange() {
-  const key = state.colorBy;
+function numRange(key) {
   if (!rangeCache[key]) {
-    const v = state.cells[key].filter(x => x >= 0).sort((a, b) => a - b);
+    const v = state.cells.values[key].filter(x => x !== null).sort((a, b) => a - b);
     // 1st-99th percentile so a few extreme cells do not flatten the ramp
     rangeCache[key] = [v[Math.floor(v.length * 0.01)], v[Math.floor(v.length * 0.99)]];
   }
@@ -114,6 +119,12 @@ function groupMembers(cond, key) {
   return plots[cond].idx.filter(i => groupOf(i) === key);
 }
 
+function formatValue(key, v) {
+  if (v === null || v === "") return "n/a";
+  if (!isNum(key)) return groupName(v, key);
+  return Number.isInteger(v) ? fmt(v) : v.toFixed(2);
+}
+
 // ---------- UMAP panels ----------
 
 function buildPanels() {
@@ -122,6 +133,8 @@ function buildPanels() {
   const xr = [Math.min(...c.x) - pad, Math.max(...c.x) + pad];
   const yr = [Math.min(...c.y) - pad, Math.max(...c.y) + pad];
   const host = $("panels");
+  host.style.gridTemplateColumns = `repeat(${c.conditions.length}, 1fr)`;
+  $("legend").style.gridTemplateColumns = `repeat(${c.conditions.length}, 1fr)`;
 
   c.conditions.forEach((cond, k) => {
     const idx = [];
@@ -201,16 +214,17 @@ function renderLegend() {
   const host = $("legend");
   host.innerHTML = "";
   const c = state.cells;
+  const v = groupVar();
   plots.forEach(({ idx }, cond) => {
     const col = document.createElement("div");
     col.className = "col";
-    col.innerHTML = `<h3>${c.conditions[cond]}</h3>`;
-    if (state.colorBy in CONTINUOUS) {
-      const [lo, hi] = continuousRange();
-      const f = v => (state.colorBy === "umis" ? fmt(Math.round(v)) : v.toFixed(2));
+    col.innerHTML = c.conditions.length > 1 ? `<h3>${c.conditions[cond]}</h3>` : "";
+    if (isNum(state.colorBy)) {
+      const [lo, hi] = numRange(state.colorBy);
+      const f = x => formatValue(state.colorBy, x);
       col.innerHTML += `<div class="ramp" style="background:linear-gradient(90deg,${RAMP.join(",")})"></div>
-        <div class="ramp-labels"><span>${f(lo)}</span><span>${CONTINUOUS[state.colorBy]}</span><span>${f(hi)}</span></div>
-        <h3>Groups (clusters)</h3>`;
+        <div class="ramp-labels"><span>${f(lo)}</span><span>${field(state.colorBy).label}</span><span>${f(hi)}</span></div>
+        <h3>Groups: ${field(v).label}</h3>`;
     }
     const counts = new Map(), sel = new Map();
     for (const i of idx) {
@@ -218,18 +232,14 @@ function renderLegend() {
       counts.set(g, (counts.get(g) || 0) + 1);
       if (state.selected.has(i)) sel.set(g, (sel.get(g) || 0) + 1);
     }
-    const order = groupOrder(cond).filter(k => counts.has(k));
-    for (const k of counts.keys()) if (!order.includes(k)) order.push(k);
-    for (const k of order) {
-      const slot = groupOrder(cond).indexOf(k);
-      const sw = state.colorBy in CONTINUOUS ? "transparent"
-        : slot >= 0 && slot < SLOTS.length ? SLOTS[slot] : OTHER;
+    for (const k of groupOrder(cond)) {
+      const sw = isNum(state.colorBy) ? "transparent" : slotOf(k, cond);
       const n = counts.get(k), s = sel.get(k) || 0;
       const b = document.createElement("button");
       b.className = "chip" + (s === n ? " full" : s > 0 ? " partial" : "");
       b.innerHTML = `<span class="sw" style="background:${sw}"></span>${groupName(k)}` +
         `<span class="n">${s && s < n ? `<span class="sel">${fmt(s)}</span> / ` : ""}${fmt(n)}</span>`;
-      b.title = `${s === n ? "Remove" : "Add"} ${groupName(k)} (${c.conditions[cond]})`;
+      b.title = `${s === n ? "Remove" : "Add"} ${groupName(k)}` + (c.conditions.length > 1 ? ` (${c.conditions[cond]})` : "");
       b.setAttribute("aria-pressed", s === n);
       b.onclick = () => toggleGroup(cond, k);
       col.appendChild(b);
@@ -259,10 +269,9 @@ function selectedByCondition(set) {
 function describeSelection(set) {
   if (set.size === 0) return { head: "All cells", groups: "" };
   const c = state.cells;
+  const multi = c.conditions.length > 1;
   const parts = [];
   plots.forEach(({ idx }, cond) => {
-    const full = [];
-    let loose = 0;
     const byGroup = new Map();
     for (const i of idx) {
       const g = groupOf(i);
@@ -271,18 +280,21 @@ function describeSelection(set) {
       e[0]++;
       if (set.has(i)) e[1]++;
     }
-    for (const [g, [n, s]] of byGroup) {
+    const full = [];
+    let loose = 0;
+    for (const g of groupOrder(cond)) {
+      const [n, s] = byGroup.get(g);
       if (s === n) full.push(groupName(g));
       else loose += s;
     }
     if (!full.length && !loose) return;
     const bits = full.slice();
     if (loose) bits.push(`${fmt(loose)} ${full.length ? "more " : ""}cell${loose === 1 ? "" : "s"}`);
-    parts.push(`${c.conditions[cond]}: ${bits.join(", ")}`);
+    parts.push((multi ? `${c.conditions[cond]}: ` : "") + bits.join(", "));
   });
   const per = selectedByCondition(set);
-  const head = `${fmt(set.size)} cells (` +
-    c.conditions.map((cond, k) => `${cond} ${fmt(per[k].size)}`).join(" · ") + ")";
+  const head = `${fmt(set.size)} cells` + (multi
+    ? " (" + c.conditions.map((cond, k) => `${cond} ${fmt(per[k].size)}`).join(" · ") + ")" : "");
   return { head, groups: parts.join(" · ") };
 }
 
@@ -318,9 +330,10 @@ function updateLoadState() {
 
 function exportBarcodes() {
   const c = state.cells;
-  const rows = ["condition\tbarcode\tcluster"];
+  const keys = c.fields.filter(f => f.type === "cat").map(f => f.key);
+  const rows = [["condition", "barcode", ...keys].join("\t")];
   const ids = [...state.selected].sort((a, b) => a - b);
-  ids.forEach(i => rows.push(`${c.conditions[c.cond[i]]}\t${c.cb[i]}\t${c.cluster[i]}`));
+  ids.forEach(i => rows.push([c.conditions[c.cond[i]], c.cb[i], ...keys.map(k => c.values[k][i])].join("\t")));
   const blob = new Blob([rows.join("\n") + "\n"], { type: "text/tab-separated-values" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
@@ -336,7 +349,7 @@ function readTrackConfig(cond, k, cbs, all) {
   const label = all ? "all cells" : `${fmt(cbs.size)} cells`;
   const cfg = {
     type: "alignment", format: "bam",
-    name: `${c.line} ${cond}: ${label}`,
+    name: c.conditions.length > 1 ? `${cond}: ${label}` : label,
     url: DATA + c.bams[cond], indexURL: DATA + c.bams[cond] + ".bai",
     // A function filter replaces igv's default one, so keep its default checks.
     filter: a => a.isMapped() && !a.isFailsVendorQualityCheck() && !a.isDuplicate() &&
@@ -406,17 +419,24 @@ function applyTrackHeight() {
   for (const t of readTracks) t.trackView.setTrackHeight(h, true);
 }
 
-async function initIGV() {
+function locusOf(g) {
+  const pad = Math.round((g[3] - g[2]) * 0.15) + 200;
+  return `${g[1]}:${Math.max(1, g[2] - pad)}-${g[3] + pad}`;
+}
+
+async function initIGV(refDir, refName) {
+  const start = genes.find(g => g[0] === START_GENE);
   browser = await igv.createBrowser($("igv"), {
     reference: {
-      id: "tgme49_toxodb13", name: "T. gondii ME49 (ToxoDB-13)",
-      fastaURL: REF + "genome.fasta", indexURL: REF + "genome.fasta.fai",
+      id: refName, name: refName,
+      fastaURL: refDir + "genome.fasta", indexURL: refDir + "genome.fasta.fai",
     },
-    locus: START_LOCUS,
+    locus: params.get("locus") || (start ? locusOf(start) : undefined),
     showNavigation: true, showSampleNames: false,
     tracks: [{
-      name: "Genes (ToxoDB-13)", type: "annotation", format: "gtf",
-      url: REF + "genes.gtf.gz", indexURL: REF + "genes.gtf.gz.tbi",
+      name: `Genes (${refName})`, type: "annotation", format: "gtf",
+      url: refDir + "genes.gtf.gz", indexURL: refDir + "genes.gtf.gz.tbi",
+      nameField: "gene_id", // label models TGME49_xxxxxx, not the transcript ID
       displayMode: "EXPANDED", order: 1, height: 70,
     }],
   });
@@ -439,25 +459,21 @@ function showReadCell(i) {
   state.highlight = i;
   const host = $("read-cell");
   host.hidden = false;
-  host.innerHTML = `Read from cell <b>${c.cb[i]}</b> · ${c.conditions[c.cond[i]]} cluster ${c.cluster[i]}
-    · ${fmt(c.umis[i])} UMIs (ringed on the UMAP) <button>Add to selection</button>`;
+  const where = c.conditions.length > 1 ? ` · ${c.conditions[c.cond[i]]}` : "";
+  host.innerHTML = `Read from cell <b>${c.cb[i]}</b>${where} · ${formatValue(c.cl_field, c.values[c.cl_field][i])}
+    (ringed on the UMAP) <button>Add to selection</button>`;
   host.querySelector("button").onclick = () => { state.selected.add(i); onSelectionChanged(); };
   redrawPanels();
 }
 
 // ---------- gene search ----------
 
-let genes = [];
 function initSearch() {
   const input = $("search-input");
   const list = $("search-results");
   const norm = s => s.toLowerCase().replace(/[-_\s.]/g, "");
   const index = genes.map(g => ({ g, id: norm(g[0]), syms: g[6].map(norm), desc: g[5].toLowerCase() }));
   const go = locus => { list.hidden = true; browser.search(locus); };
-  const locusOf = g => {
-    const pad = Math.round((g[3] - g[2]) * 0.15) + 200;
-    return `${g[1]}:${Math.max(1, g[2] - pad)}-${g[3] + pad}`;
-  };
   const matches = raw => {
     const q = norm(raw), ql = raw.trim().toLowerCase();
     if (q.length < 2) return [];
@@ -545,25 +561,42 @@ function segmented(id, onPick) {
   });
 }
 
+function initMenus(lines) {
+  const lineSel = $("line-select");
+  lineSel.innerHTML = Object.entries(lines).map(([id, l]) =>
+    `<option value="${id}"${id === LINE ? " selected" : ""}>${l.label} · ${fmt(l.cells)} cells</option>`).join("");
+  lineSel.onchange = () => { location.search = `?line=${encodeURIComponent(lineSel.value)}`; };
+
+  const c = state.cells;
+  $("color-by").innerHTML = c.fields.map(f => `<option value="${f.key}">${f.label}</option>`).join("");
+  state.colorBy = c.fields[0].key;
+  $("color-by").onchange = e => { state.colorBy = e.target.value; onSelectionChanged(); };
+  $("group-cl").textContent = `by ${field(c.cl_field).label.toLowerCase()}`;
+}
+
 async function main() {
-  const [cells, geneList] = await Promise.all([loadJSON(DATA + "cells.json"), loadJSON(REF + "genes.json")]);
+  const lines = await loadJSON("../data/lines.json");
+  const cells = await loadJSON(DATA + "cells.json");
+  const refDir = `../data/ref/${cells.ref}/`;
+  genes = await loadJSON(refDir + "genes.json");
   state.cells = cells;
   state.n = cells.cb.length;
-  genes = geneList;
+  cells.fields.forEach(f => (state.fields[f.key] = f));
   cbIndex = cells.conditions.map(() => new Map());
   for (let i = 0; i < state.n; i++) cbIndex[cells.cond[i]].set(cells.cb[i], i);
+  const shown = cells.fields.slice(0, 4).map(f => f.key);
   hoverText = cells.cb.map((_, i) =>
-    `${cells.conditions[cells.cond[i]]} · Cluster ${cells.cluster[i]}<br>` +
-    `${cells.phase[i]} · ${cells.stage10[i]} · ${fmt(cells.umis[i])} UMIs`);
-  $("line-label").textContent = cells.line;
+    (cells.conditions.length > 1 ? `${cells.conditions[cells.cond[i]]}<br>` : "") +
+    shown.map(k => `${field(k).label}: ${formatValue(k, cells.values[k][i])}`).join("<br>"));
+  document.title = `${cells.line} · Cell Read Browser`;
 
+  initMenus(lines);
   buildPanels();
   onSelectionChanged();
   initSplitter();
-  await initIGV();
+  await initIGV(refDir, cells.ref);
   initSearch();
 
-  $("color-by").onchange = e => { state.colorBy = e.target.value; onSelectionChanged(); };
   segmented("pick", b => { state.pick = b.dataset.pick; });
   segmented("mode", b => { state.mode = b.dataset.mode; });
   $("sel-clear").onclick = () => { state.selected = new Set(); onSelectionChanged(); };

@@ -9,8 +9,14 @@ it needs a backend or a fork of igv.js.
 
 ## Status (2026-10-30)
 
-Phase 1 prototype runs locally on AP2XI-2/AP2XII-1 (UT 11,642 cells,
-IAA 24h 14,386 cells). See README for how to run it.
+Two datasets ("lines") in one page, switched from the header:
+- AP2XI-2/AP2XII-1 (Cell Ranger, ToxoDB-13): UT 11,642 + IAA 24h 14,386 cells.
+- AlRubaye 2026 cat gut (STARsolo, ToxoDB-68): 23,121 enteric-stage cells,
+  95.5M reads after dedup (340M duplicate reads dropped, ~4.6 reads/molecule).
+  Dedup checked against STARsolo counts: 495/495, 756/756, 2,316/2,320 UMIs.
+
+Code is on GitHub (private): febreezioman/SC-gene-browser. A copy of `data/`
+is on the Crucial X10 (`SC-gene-browser/data/`) for use on another computer.
 
 - Slim BAMs: UT 28.2M reads / 1.50 GB, IAA 24h 49.4M reads / 2.71 GB
   (from 11–12 GB each), ~7 min per condition.
@@ -44,12 +50,18 @@ IAA 24h 14,386 cells). See README for how to run it.
   conditions into one track would need a merged BAM with a condition tag
   (barcodes can repeat across conditions); not done.
 
+- Each line's cells.json declares its fields (colour/group options), so new
+  datasets need no page changes; prep_bam.py takes barcodes and CL tags from it.
+- STARsolo dedup: one read per (CB, UB, GX gene), else per (CB, UB, strand,
+  start). Parallel per contig, parts on ext4 scratch (NTFS stalls).
+- Gene models labelled via igv.js `nameField: "gene_id"` (keeps isoforms).
+
 ## Open questions / next
 
 1. Phase 2 backend (FastAPI + pysam returning only the selected cells' reads),
    so highly expressed genes and large selections stay fast. Needed for public
    hosting too, since that also needs real auth.
-2. Add the other lines (AP2XII-1/AP2VIII-7, AP2XII-1/AP2VIII-7/AP2XI-2, MORC KD).
+2. Add the other AP2 lines (AP2XII-1/AP2VIII-7, AP2XII-1/AP2VIII-7/AP2XI-2, MORC KD).
    MORC KD has no rows in the coords table; its cells/clusters need another source.
 3. Per-cell normalised coverage: selection vs rest.
 4. Colour the UMAP by expression of the gene in view.

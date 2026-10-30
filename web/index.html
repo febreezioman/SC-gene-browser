@@ -9,7 +9,8 @@
 </head>
 <body>
 <header>
-  <h1>Cell Read Browser <span id="line-label"></span></h1>
+  <h1>Cell Read Browser</h1>
+  <select id="line-select" aria-label="Dataset"></select>
   <form id="search" autocomplete="off">
     <input id="search-input" type="search" placeholder="Gene name (SAG1, AP2XI-2), TGME49 ID, description, or chr:start-end" aria-label="Go to gene or locus">
     <ul id="search-results" hidden></ul>
@@ -19,14 +20,7 @@
 <main>
   <section id="cells">
     <div class="toolbar">
-      <label>Colour <select id="color-by">
-        <option value="cluster">Leiden cluster</option>
-        <option value="phase">Cell-cycle phase</option>
-        <option value="stage10">Stage (10-stage call)</option>
-        <option value="brady_ees">Bradyzoite / EES call</option>
-        <option value="pseudotime">Pseudotime</option>
-        <option value="umis">UMIs per cell</option>
-      </select></label>
+      <label>Colour <select id="color-by"></select></label>
       <span class="tool"><span>Click picks</span>
       <div class="seg" id="pick" role="group" aria-label="What a click on the UMAP picks">
         <button data-pick="group" class="on">Group</button>
@@ -58,7 +52,7 @@
     <div class="toolbar">
       <label>Group <select id="group-by">
         <option value="none">none (all reads together)</option>
-        <option value="tag:CL">by cluster</option>
+        <option value="tag:CL" id="group-cl">by cluster</option>
         <option value="strand">by strand</option>
       </select></label>
       <label>Colour <select id="read-color">
