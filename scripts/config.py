@@ -12,6 +12,7 @@ DATA = ROOT / "data"
 GENOME_FASTA = REF / "ToxoDB-13.0_TgondiiME49_Genome.fasta"
 GTF = REF / "Tgondii_ToxoDB13.cellranger.gtf"
 ANNOTATION_TSV = REF / "ToxoDB-68_ME49_master_annotation.tsv"
+GFF = REF / "ToxoDB-13.0_TgondiiME49.gff"
 
 # One entry per line. `samples` maps a condition (as written in COORDS) to its
 # Cell Ranger run. Labels use AP2 gene names (see AI.md).

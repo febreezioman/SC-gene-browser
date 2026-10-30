@@ -28,6 +28,18 @@ Set up the project and docs for a single-cell browser that shows per-cell reads.
   highlight ring (must be WebGL to sit above WebGL points).
 - Verified UMI counts match Cell Ranger exactly at two genes.
 
+## Follow-up 2: usability round (user feedback)
+- Selection is staged: build it (click toggles a whole group, legend chips
+  toggle, lasso adds/removes), then **Load reads**. No reads load while selecting.
+  Chips show full/partial selection; the summary lists the groups.
+- Reads: default no grouping (one pile per condition), expanded rows, tracks
+  fit the panel height; Track height slider + Fit; Display expanded/squished.
+- Draggable splitter between the panels (width remembered in localStorage).
+- Gene models labelled by ME49 gene ID (transcript_id rewritten; genes and
+  transcripts are 1:1). Search by common names pulled from ToxoDB-13/68
+  descriptions (1,593 genes), ignoring case and hyphens.
+- igv.js has no public resize(); the page calls its window-resize handler.
+
 ## Decisions made
 - igv.js 3.8.8 without a fork; Sc-x2 read-only; generated data in `data/`.
 - Default locus AP2XI-2 (SAG1 is too dense to start on).

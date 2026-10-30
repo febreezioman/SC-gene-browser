@@ -11,7 +11,7 @@
 <header>
   <h1>Cell Read Browser <span id="line-label"></span></h1>
   <form id="search" autocomplete="off">
-    <input id="search-input" type="search" placeholder="Gene ID, description, or chr:start-end" aria-label="Go to gene or locus">
+    <input id="search-input" type="search" placeholder="Gene name (SAG1, AP2XI-2), TGME49 ID, description, or chr:start-end" aria-label="Go to gene or locus">
     <ul id="search-results" hidden></ul>
   </form>
 </header>
@@ -27,40 +27,60 @@
         <option value="pseudotime">Pseudotime</option>
         <option value="umis">UMIs per cell</option>
       </select></label>
-      <div class="seg" role="group" aria-label="Selection mode">
-        <button data-mode="replace" class="on">Replace</button>
-        <button data-mode="add">Add</button>
-        <button data-mode="remove">Remove</button>
-      </div>
+      <span class="tool"><span>Click picks</span>
+      <div class="seg" id="pick" role="group" aria-label="What a click on the UMAP picks">
+        <button data-pick="group" class="on">Group</button>
+        <button data-pick="cell">Cell</button>
+      </div></span>
+      <span class="tool"><span>Lasso</span>
+      <div class="seg" id="mode" role="group" aria-label="Lasso adds or removes">
+        <button data-mode="add" class="on">Adds</button>
+        <button data-mode="remove">Removes</button>
+      </div></span>
     </div>
     <div id="panels"></div>
     <div id="legend"></div>
+    <p class="hint">Click a cell or a legend entry to toggle its whole group; lasso to add cells.
+      Build up the selection, then load the reads.</p>
     <div id="selection-bar">
-      <span id="sel-summary">No selection: reads from all cells</span>
-      <span class="spacer"></span>
-      <button id="sel-clear">Clear</button>
-      <button id="sel-export">Export barcodes</button>
+      <div id="sel-summary">No cells selected</div>
+      <div class="actions">
+        <button id="sel-clear">Clear</button>
+        <button id="sel-export">Export barcodes</button>
+        <button id="load-reads" class="primary">Load reads for all cells</button>
+      </div>
     </div>
-    <p class="hint">Lasso or click cells (Shift adds). Click a legend entry to select that group in one condition.
-      Click a read to find its cell.</p>
   </section>
+
+  <div id="splitter" role="separator" aria-orientation="vertical" aria-label="Resize panels" tabindex="0"></div>
 
   <section id="genome">
     <div class="toolbar">
-      <label>Group reads <select id="group-by">
+      <label>Group <select id="group-by">
+        <option value="none">none (all reads together)</option>
         <option value="tag:CL">by cluster</option>
         <option value="strand">by strand</option>
-        <option value="none">none</option>
       </select></label>
-      <label>Colour reads <select id="read-color">
+      <label>Colour <select id="read-color">
         <option value="strand">by strand</option>
         <option value="tag:RE">by region (exon / intron / intergenic)</option>
         <option value="tag:CB">by cell</option>
         <option value="none">none</option>
       </select></label>
-      <span id="read-cell"></span>
+      <label>Display <select id="display-mode">
+        <option value="EXPANDED">expanded</option>
+        <option value="SQUISHED">squished</option>
+      </select></label>
+      <span class="tool"><label for="track-height">Track height</label>
+        <input id="track-height" type="range" min="150" max="3000" step="10">
+        <button id="fit-height" title="Fit read tracks to the panel height">Fit</button></span>
     </div>
-    <div id="igv"></div>
+    <div id="loaded-bar" hidden></div>
+    <div id="read-cell" hidden></div>
+    <div id="igv-wrap">
+      <div id="igv"></div>
+      <p id="reads-empty">Select cells on the left, then press <b>Load reads</b>.</p>
+    </div>
   </section>
 </main>
 

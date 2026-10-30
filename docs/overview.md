@@ -39,6 +39,10 @@ IAA 24h 14,386 cells). See README for how to run it.
 - Local use first; public hosting is wanted later (see design.md, Hosting).
 - Sc-x2 is read-only; all generated data lives in `data/` (gitignored).
 - 2D UMAP for selection, one panel per condition (clusters are per condition).
+- Selection is staged and reads load on demand (user: live reloading was laggy).
+- One read track per condition, reads not grouped by default. Merging the
+  conditions into one track would need a merged BAM with a condition tag
+  (barcodes can repeat across conditions); not done.
 
 ## Open questions / next
 

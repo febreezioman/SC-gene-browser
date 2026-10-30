@@ -34,8 +34,11 @@ $P scripts/export_cells.py AP2XI-2_AP2XII-1     # cell table
 python3 scripts/serve.py                        # then open http://127.0.0.1:8000/web/
 ```
 
-Lasso/click cells or click a legend entry; reads for those cells appear on the
-right, one track per condition. Click a read to ring its cell on the UMAP.
+Click a cell or a legend entry to toggle its whole group (or lasso cells), then
+press **Load reads**: one read track per condition appears on the right. Drag
+the bar between the panels to resize; read tracks fit the panel height (or use
+the Track height slider). Search by common name (SAG1, AP2XI-2), TGME49 ID or
+description. Click a read to ring its cell on the UMAP.
 `?locus=TGME49_chrXII:1176841-1187769` opens at a given locus.
 
 ## Status
