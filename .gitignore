@@ -1,0 +1,14 @@
+# Generated, browser-ready data (BAMs, indexes, cell tables)
+data/
+*.bam
+*.bai
+*.csi
+*.bw
+# Python / node
+__pycache__/
+*.pyc
+node_modules/
+.venv/
+# Editor / OS
+.DS_Store
+*.swp
